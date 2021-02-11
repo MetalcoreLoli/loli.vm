@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include "panic.h"
 
 #define VM_STACK_CAPACITY 5
 #define MAKE_INST_PUSH(val) ((inst_t) {.type=INST_PUSH, .operand=(val)})
@@ -13,14 +14,7 @@
 #define MAKE_INST_DIV ((inst_t) {.type=INST_DIV})
 
 typedef int64_t word_t;
-typedef enum loli_panic {
-    PANIC_STACK_OVERFLOW,
-    PANIC_STACK_UNDERFLOW,
-    PANIC_DIV_BY_ZERO,
-    PANIC_NOT_IMPLIMENTED,
-    PANIC_ILLEGAL_INST,
-    PANIC_OK,
-} loli_panic_t;
+
 
 typedef enum {
     INST_PUSH,
@@ -107,23 +101,8 @@ loli_panic_t vm_execute_inst (loliVM_t *vm, inst_t inst) {
     vm->iptr++;
     return PANIC_OK;
 }
+loliVM_t vm = {0};
 
-const char *panic_cstr (loli_panic_t panic) {
-    switch (panic) {
-    case PANIC_OK:              return "PANIC_OK";
-    case PANIC_STACK_OVERFLOW:  return "PANIC_STACK_OVERFLOW";
-    case PANIC_STACK_UNDERFLOW: return "PANIC_STACK_UNDERFLOW";
-    case PANIC_DIV_BY_ZERO:     return "PANIC_DIV_BY_ZERO";
-    case PANIC_NOT_IMPLIMENTED: return "PANIC_NOT_IMPLIMENTED";
-    case PANIC_ILLEGAL_INST:    return "PANIC_ILLEGAL_INST";
-    }
-    return "PANIC_OK";
-}
-
-void loli_is_panicing(loli_panic_t panic) {
-    fprintf (stderr, "ERROR: %s\n", panic_cstr(panic));
-    exit (1);
-}
 
 void vm_dump (const loliVM_t *vm) {
     fprintf (stdout, "Stack:\n");
@@ -132,10 +111,9 @@ void vm_dump (const loliVM_t *vm) {
     }
 }
 
-loliVM_t vm = {0};
 
-void run_program(loliVM_t *vm, const inst_t *program, size_t size_of_program, size_t count_of_runs) {
-    for (;vm->iptr < size_of_program;) {
+void run_program(loliVM_t *vm, const inst_t *program, size_t size_of_program) {
+    for (;(size_t)vm->iptr < size_of_program;) {
         loli_panic_t panic = vm_execute_inst (vm, program[vm->iptr]);
         if (panic != PANIC_OK) {
             vm_dump (vm);
@@ -145,8 +123,6 @@ void run_program(loliVM_t *vm, const inst_t *program, size_t size_of_program, si
     }
     vm->iptr = 0;
 }
-
-
 int main ()
 {
     inst_t program[] = {
@@ -160,7 +136,7 @@ int main ()
     const size_t size_of_program = sizeof (program) / sizeof(program[0]);
 
     for (size_t i = 0;  i < 1; i++) {
-        run_program(&vm, program, size_of_program, 1);
+        run_program(&vm, program, size_of_program);
     }
     //    run_program(&vm, program, size_of_program);
 
