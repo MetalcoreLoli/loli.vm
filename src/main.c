@@ -31,6 +31,10 @@ typedef struct inst {
     word_t operand;
 } inst_t;
 
+typedef struct program {
+    inst_t *body;
+    size_t size;
+} program_t;
 
 typedef struct loliVM {
     word_t stack[VM_STACK_CAPACITY];
@@ -112,9 +116,9 @@ void vm_dump (const loliVM_t *vm) {
 }
 
 
-void run_program(loliVM_t *vm, const inst_t *program, size_t size_of_program) {
-    for (;(size_t)vm->iptr < size_of_program;) {
-        loli_panic_t panic = vm_execute_inst (vm, program[vm->iptr]);
+void run_program(loliVM_t *vm, const program_t *program) {
+    for (;(size_t)vm->iptr < program->size;) {
+        loli_panic_t panic = vm_execute_inst (vm, program->body[vm->iptr]);
         if (panic != PANIC_OK) {
             vm_dump (vm);
             loli_is_panicing (panic);
@@ -123,22 +127,26 @@ void run_program(loliVM_t *vm, const inst_t *program, size_t size_of_program) {
     }
     vm->iptr = 0;
 }
+
 int main ()
 {
-    inst_t program[] = {
+    inst_t body[] = {
         MAKE_INST_PUSH (1), // 0
         MAKE_INST_PUSH (2), // 1
         MAKE_INST_SUM,      // 2
         MAKE_INST_PUSH (3), // 3
         MAKE_INST_JE (2),   // 4
+        MAKE_INST_SUM,
     };
 
-    const size_t size_of_program = sizeof (program) / sizeof(program[0]);
+    const size_t size_of_program = sizeof (body) / sizeof(body[0]);
 
-    for (size_t i = 0;  i < 1; i++) {
-        run_program(&vm, program, size_of_program);
-    }
-    //    run_program(&vm, program, size_of_program);
+    program_t program = {
+        .size = size_of_program,
+        .body = body
+    };
+
+    run_program(&vm, &program);
 
     vm_dump (&vm);
     return 0;
