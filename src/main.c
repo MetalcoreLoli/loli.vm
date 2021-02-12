@@ -4,7 +4,7 @@
 #include <string.h>
 #include "panic.h"
 
-#define VM_STACK_CAPACITY 5
+#define VM_STACK_CAPACITY 1024 
 #define VM_PROGAM_CAPACITY 1024 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -49,6 +49,8 @@ typedef struct loliVM {
     size_t size_of_program;
 
     word_t iptr;
+
+    _Bool halt;
 } loliVM_t;
 
 
@@ -113,7 +115,8 @@ loli_panic_t vm_execute_inst (loliVM_t *vm) {
         break;
 
     case INST_HALT: 
-        return PANIC_NOT_IMPLIMENTED;
+        vm->halt = 1;
+        return PANIC_OK;
         
     default: return PANIC_ILLEGAL_INST;
     }
