@@ -8,6 +8,7 @@ typedef enum loli_panic {
     PANIC_DIV_BY_ZERO,
     PANIC_NOT_IMPLIMENTED,
     PANIC_ILLEGAL_INST,
+    PANIC_ILLEGAL_INST_ACCESS,
     PANIC_OK,
 } loli_panic_t;
 

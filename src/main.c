@@ -1,9 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include "panic.h"
 
 #define VM_STACK_CAPACITY 5
+#define VM_PROGAM_CAPACITY 1024 
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 #define MAKE_INST_PUSH(val) ((inst_t) {.type=INST_PUSH, .operand=(val)})
 #define MAKE_INST_JMP(addr) ((inst_t) {.type=INST_JMP, .operand=(addr)})
 #define MAKE_INST_JE(addr) ((inst_t) {.type=INST_JE, .operand=(addr)})
@@ -24,6 +28,7 @@ typedef enum {
     INST_DIV,
     INST_JMP,
     INST_JE,
+    INST_HALT,
 } inst_type_t;
 
 typedef struct inst {
@@ -40,12 +45,18 @@ typedef struct loliVM {
     word_t stack[VM_STACK_CAPACITY];
     size_t stack_size;
 
-    inst_t *program;
+    inst_t program[VM_PROGAM_CAPACITY];
+    size_t size_of_program;
+
     word_t iptr;
 } loliVM_t;
 
 
-loli_panic_t vm_execute_inst (loliVM_t *vm, inst_t inst) {
+loli_panic_t vm_execute_inst (loliVM_t *vm) {
+    if (vm->iptr < 0 || vm->iptr >= (word_t)vm->size_of_program) {
+        return PANIC_ILLEGAL_INST_ACCESS;
+    }
+    inst_t inst = vm->program[vm->iptr];
     switch (inst.type) {
     case INST_PUSH: 
         if (vm->stack_size + 1 > VM_STACK_CAPACITY) {
@@ -100,6 +111,10 @@ loli_panic_t vm_execute_inst (loliVM_t *vm, inst_t inst) {
             return PANIC_OK;
         }
         break;
+
+    case INST_HALT: 
+        return PANIC_NOT_IMPLIMENTED;
+        
     default: return PANIC_ILLEGAL_INST;
     }
     vm->iptr++;
@@ -115,10 +130,9 @@ void vm_dump (const loliVM_t *vm) {
     }
 }
 
-
 void run_program(loliVM_t *vm, const program_t *program) {
     for (;(size_t)vm->iptr < program->size;) {
-        loli_panic_t panic = vm_execute_inst (vm, program->body[vm->iptr]);
+        loli_panic_t panic = vm_execute_inst (vm);
         if (panic != PANIC_OK) {
             vm_dump (vm);
             loli_is_panicing (panic);
@@ -126,6 +140,17 @@ void run_program(loliVM_t *vm, const program_t *program) {
         //vm_dump (vm);
     }
     vm->iptr = 0;
+}
+
+loli_panic_t vm_load_prog_from_memory (loliVM_t *vm, program_t *program) {
+    if (program->size > VM_PROGAM_CAPACITY) {
+        return PANIC_STACK_OVERFLOW;
+    }
+
+    memcpy (vm->program, program->body, sizeof (program->body[0]) * program->size);    
+    vm->size_of_program = program->size;
+
+    return PANIC_OK;
 }
 
 int main ()
@@ -139,13 +164,14 @@ int main ()
         MAKE_INST_SUM,
     };
 
-    const size_t size_of_program = sizeof (body) / sizeof(body[0]);
+    const size_t size_of_program = ARRAY_SIZE(body);
 
     program_t program = {
         .size = size_of_program,
         .body = body
     };
 
+    vm_load_prog_from_memory(&vm, &program);
     run_program(&vm, &program);
 
     vm_dump (&vm);
