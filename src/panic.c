@@ -9,6 +9,8 @@ const char *panic_cstr (loli_panic_t panic) {
     case PANIC_NOT_IMPLIMENTED:         return "PANIC_NOT_IMPLIMENTED";
     case PANIC_ILLEGAL_INST:            return "PANIC_ILLEGAL_INST";
     case PANIC_ILLEGAL_INST_ACCESS:     return "PANIC_ILLEGAL_INST_ACCESS";
+    case PANIC_ILLEGAL_FILE_ACCESS:     return "PANIC_ILLEGAL_FILE_ACCESS";
+    case PANIC_SEGMENTATION_FAULT:      return "PANIC_SEGMENTATION_FAULT";
     }
     return "PANIC_OK";
 }
@@ -17,5 +19,3 @@ void loli_is_panicing(loli_panic_t panic) {
     fprintf (stderr, "ERROR: %s\n", panic_cstr(panic));
     exit (1);
 }
-
-

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "panic.h"
+#include "../dep/Collectoins/headers/carray.h"
 
 #define VM_STACK_CAPACITY 1024 
 #define VM_PROGAM_CAPACITY 1024 
@@ -18,7 +19,6 @@
 #define MAKE_INST_DIV ((inst_t) {.type=INST_DIV})
 
 typedef int64_t word_t;
-
 
 typedef enum {
     INST_PUSH,
@@ -156,8 +156,59 @@ loli_panic_t vm_load_prog_from_memory (loliVM_t *vm, program_t *program) {
     return PANIC_OK;
 }
 
+
+inst_t getInstrationFromLine(const char * line, size_t size)
+{
+    char *inst  = strtok (line, " ");
+    char *arg   = strtok (line, " ");
+    if (strcmp (inst, "push")) return MAKE_INST_PUSH ((int)(arg - '0'));
+    if (strcmp (inst, "je"))   return MAKE_INST_JE ((int)(arg - '0'));
+    if (strcmp (inst, "sum"))  return MAKE_INST_SUM;
+    return MAKE_INST_SUM;
+}
+
+loli_panic_t vm_load_prog_from_file(const char* name, program_t **pr)
+{
+    FILE* fpIn;
+
+    if ((fpIn = fopen (name, "rb")) == NULL) 
+        loli_is_panicing (PANIC_ILLEGAL_FILE_ACCESS);
+    
+    char line[80];
+    int countOfLines = 0;
+
+    carray_t *body;
+    if (carray_new (&body) == COL_OK) {
+        
+        while (fgets (line, 80, fpIn))
+        {
+            inst_t inst = getInstrationFromLine(line, 80);
+            carray_add (body, (void*)&inst);
+        }
+    }
+    program_t *program = malloc (sizeof (program_t)); 
+
+    if (program == NULL)
+        return PANIC_SEGMENTATION_FAULT;
+
+    program->size = carray_size(body);
+
+    inst_t insts[carray_size(body)];
+    CARRAY_FOREACH(body, item, {
+            size_t idx = 0;
+            insts[idx++] = *(inst_t *)item;
+        });
+    
+    program->body = insts;
+    
+    *pr = program;
+    return PANIC_OK;
+}
+
+
 int main ()
 {
+    /*
     inst_t body[] = {
         MAKE_INST_PUSH (1), // 0
         MAKE_INST_PUSH (2), // 1
@@ -167,15 +218,16 @@ int main ()
         MAKE_INST_SUM,
     };
 
-    const size_t size_of_program = ARRAY_SIZE(body);
-
     program_t program = {
         .size = size_of_program,
         .body = body
-    };
+    };*/
+    program_t *pr;
 
-    vm_load_prog_from_memory(&vm, &program);
-    run_program(&vm, &program);
+    //vm_load_prog_from_memory(&vm, &program);
+    if (vm_load_prog_from_file ("test.loliasm", &pr) == NULL)
+        loli_is_panicing (PANIC_SEGMENTATION_FAULT);
+    run_program(&vm, pr);
 
     vm_dump (&vm);
     return 0;
