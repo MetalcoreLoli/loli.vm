@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include "panic.h"
+#include "../dep/Collectoins/headers/clist.h"
 #include "../dep/Collectoins/headers/carray.h"
 
 #define VM_STACK_CAPACITY 1024 
@@ -126,6 +127,32 @@ loli_panic_t vm_execute_inst (loliVM_t *vm) {
 }
 loliVM_t vm = {0};
 
+char * instAsCstr(inst_type_t type) 
+{
+    switch (type) 
+    {
+    case INST_PUSH: 
+        return "PUSH";
+        
+    case INST_MUL: 
+        return "MUL";
+            
+    case INST_DIV: 
+        return "DIV";
+        
+    case INST_SUM: 
+        return "SUM";
+        
+    case INST_SUB: 
+        return "SUB";
+            
+    case INST_JE: 
+        return "JE";
+
+    default: 
+        loli_is_panicing (PANIC_ILLEGAL_INST_ACCESS);
+    }
+}
 
 void vm_dump (const loliVM_t *vm) {
     fprintf (stdout, "Stack:\n");
@@ -171,19 +198,64 @@ int cstrToNum (char *num, size_t size)
     return result;
 }
 
-inst_t getInstrationFromLine(const char * line, size_t size)
+carray_t *splitstr(char str[], char delim) 
 {
-    char *inst  = strtok (line, " ");
-    char *arg   = strtok (NULL, " ");
+    carray_t *buffer;
+    size_t lenOfOldStr = strlen (str);
+    char * nomalizedStr = malloc (lenOfOldStr + 1);
+    memcpy(nomalizedStr, str, lenOfOldStr);
+    nomalizedStr[lenOfOldStr] = ' ';
+    nomalizedStr[lenOfOldStr - 1] = ' ';
+
+    if (carray_new (&buffer) == COL_ALLOC_ERR)
+        loli_is_panicing (PANIC_SEGMENTATION_FAULT);
+
+    size_t prevwordend = 0;
+    size_t words = 0;
+    for (size_t i = 0; i < strlen(nomalizedStr); i++)
+    {
+        if (nomalizedStr[i] == delim)
+        {
+            size_t sizeOfNewWord = i - prevwordend;
+            char *word  = malloc (sizeof (char) * sizeOfNewWord);
+            
+            for (size_t j = 0; j < sizeOfNewWord; j++) 
+                word[j] = nomalizedStr[j + prevwordend];
+
+            carray_add(buffer, word);
+
+            prevwordend = i;
+            words++;
+        }
+    }
+    
+    free (nomalizedStr);
+    return buffer;
+}
+
+loli_panic_t getInstrationFromLine(char * line, size_t size, inst_t **out)
+{
+    carray_t *pword = splitstr (line, ' ');
+
+    char *inst;
+    char *arg;
+
+    carray_get_at(pword, 0, (void*)&inst);
+    carray_get_at(pword, 1, (void*)&arg);
+
+    inst_t *pinst = NULL;
 
     if (strcmp (inst, "push") == 0) 
-        return MAKE_INST_PUSH (cstrToNum(arg, ARRAY_SIZE(arg)));
+        pinst = &MAKE_INST_PUSH (cstrToNum(arg, ARRAY_SIZE(arg)));
     else if (strcmp (inst, "je") == 0)   
-        return MAKE_INST_JE (cstrToNum(arg, ARRAY_SIZE(arg)));
+        pinst = &MAKE_INST_JE (cstrToNum(arg, ARRAY_SIZE(arg)));
     else if (strcmp (inst, "sum") == 0)  
-        return MAKE_INST_SUM;
+        pinst = &MAKE_INST_SUM;
+    else 
+        return PANIC_ILLEGAL_INST;
 
-    return MAKE_INST_SUM;
+    *out = pinst;
+    return PANIC_OK;
 }
 
 loli_panic_t vm_load_prog_from_file(const char* name, program_t **pr)
@@ -193,17 +265,19 @@ loli_panic_t vm_load_prog_from_file(const char* name, program_t **pr)
     if ((fpIn = fopen (name, "r")) == NULL) 
         loli_is_panicing (PANIC_ILLEGAL_FILE_ACCESS);
     
-    int countOfLines = 0;
+    clist_t *body;
+    if (clist_new (&body) == COL_OK) {
 
-    carray_t *body;
-    if (carray_new (&body) == COL_OK) {
-
-        char line[80];
-        while (fscanf (fpIn, "%[^\n]", line) != EOF)
+        const size_t lenghtOfLine = 25;
+        char line[lenghtOfLine];
+        while (fgets(line, lenghtOfLine, fpIn) != NULL)
         {
-            printf ("%s", line);
-            inst_t inst = getInstrationFromLine(line, 80);
-            carray_add (body, (void*)&inst);
+            inst_t *pout = NULL;
+            loli_panic_t panic = getInstrationFromLine(line, lenghtOfLine, &pout);
+            if (panic != PANIC_OK)
+                loli_is_panicing (panic);
+            
+            clist_add (body, pout);
         }
     }
     program_t *program = malloc (sizeof (program_t)); 
@@ -211,15 +285,17 @@ loli_panic_t vm_load_prog_from_file(const char* name, program_t **pr)
     if (program == NULL)
         return PANIC_SEGMENTATION_FAULT;
 
-    program->size = carray_size(body);
+    program->body = malloc (sizeof (inst_t) * clist_size (body));
 
-    inst_t insts[carray_size(body)];
-    CARRAY_FOREACH(body, item, {
-            size_t idx = 0;
-            insts[idx++] = *(inst_t*)item;
-        });
-    
-    program->body = insts;
+    size_t idx = 0;
+    inst_t *item;
+    clist_iter_t *iter;
+    clist_iter_new (body, (void *)&iter);
+    while (clist_iter_next(iter, (void *)&item) != COL_ITER_END)
+    {
+        printf ("%s", instAsCstr(item->type));
+    }
+
     *pr = program;
     fclose (fpIn);
     return PANIC_OK;
@@ -229,34 +305,7 @@ void program_dump (const inst_t *ar, size_t size)
 {
     printf ("program:\n");
     for (size_t i = 0; i < size; i++) 
-    {
-        switch (ar[i].type) 
-        {
-            case INST_PUSH: 
-                printf ("\tPUSH %ld\n", ar[i].operand);
-                break;
-
-            case INST_MUL: 
-                printf ("\tMUL\n");
-                break;
-            
-            case INST_DIV: 
-                printf ("\tDIV\n");
-                break;
-
-            case INST_SUM: 
-                printf ("\tSUM\n");
-                break;
-
-            case INST_SUB: 
-                printf ("\tSUB\n");
-                break;
-            
-            case INST_JE: 
-                printf ("\tJE %ld\n", ar[i].operand);
-                break;
-        }
-    }
+        printf ("\t%s%ld\n", instAsCstr (ar[i].type), ar[i].operand);
 }
 
 
@@ -277,17 +326,20 @@ int main ()
         .size = ARRAY_SIZE (body),
         .body = body
     };
-    program_t *pr;
+    program_t *pr = malloc (sizeof (program_t));
+    if (pr == NULL)
+        loli_is_panicing (PANIC_SEGMENTATION_FAULT);
 
     //vm_load_prog_from_memory(&vm, &program);
     //program_dump (program.body, program.size);
     //run_program(&vm, &program);
     
-    if (vm_load_prog_from_file ("test.loliasm", &pr) == NULL)
+    if (vm_load_prog_from_file ("test.loliasm", &pr) != PANIC_OK)
         loli_is_panicing (PANIC_SEGMENTATION_FAULT);
     
     program_dump (pr->body, pr->size);
     //run_program(&vm, &pr);
     vm_dump (&vm);
+    free (pr);
     return 0;
 }
